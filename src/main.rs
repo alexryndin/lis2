@@ -1,15 +1,8 @@
-use lis2;
+use lis2::repl;
+
 fn main() {
-    let v = [1,2,3];
-    let input = String::from("(+ 2 2)");
-
-    let mut t = lis2::Tokenizer2::new(&input);
-
-    while let Some(v) = t.next() {
-        print!("{:?}", v);
-    }
-
-    println!("Hello, world!");
+    println!("lis2, v0.1.0", );
+    repl::repl("λ > ");
 }
 
 fn test(v: u8) {
