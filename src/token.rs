@@ -5,6 +5,7 @@ pub enum Token<'a> {
     LParen,
     RParen,
     Symbol(&'a str),
+    Number(&'a str),
     Literal(&'a str),
     Quote,
     Dot,
@@ -16,8 +17,15 @@ pub struct Tokenizer2<'a> {
     pos: usize,
 }
 
-#[derive(Debug)]
-pub struct TokenizerError;
+#[derive(Debug, PartialEq)]
+enum ErrorKind {
+    GeneralError,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct TokenizerError {
+    error: ErrorKind,
+}
 
 impl<'a> Tokenizer2<'a> {
     pub fn new(input: &str) -> Tokenizer2 {
@@ -87,52 +95,63 @@ impl<'a> Tokenizer2<'a> {
         Ok(&self.input[start..end])
     }
 
-    pub fn next(&mut self) -> Result<Token, TokenizerError> {
+//    pub fn next(&mut self) -> Result<Token<'a>, TokenizerError> {
+//        if let Some(t) = self.get() {
+//            match t as char {
+//                ' ' => self.next(),
+//                '(' => Ok(Token::LParen),
+//                ')' => Ok(Token::RParen),
+//                'a'..='z' | '+' | '-' | '*' | '/' => {
+//                    if let Ok(v) = self.collect(Self::is_character) {
+//                        Ok(Token::Symbol(str::from_utf8(v).unwrap()))
+//                    } else {
+//                        Err(TokenizerError{error: ErrorKind::GeneralError})
+//                    }
+//                }
+//                '0'..='9' => {
+//                    if let Ok(v) = self.collect(Self::is_number) {
+//                        Ok(Token::Symbol(str::from_utf8(v).unwrap()))
+//                    } else {
+//                        Err(TokenizerError{error: ErrorKind::GeneralError})
+//                    }
+//                }
+//                '.' => Ok(Token::Dot),
+//                '\'' => Ok(Token::Quote),
+//                _ => Err(TokenizerError{error: ErrorKind::GeneralError}),
+//            }
+//        } else {
+//            Ok(Token::EOF)
+//        }
+//    }
+}
+
+impl <'a> Iterator for Tokenizer2<'a> {
+
+    type Item = Result<Token<'a>, TokenizerError>;
+
+    fn next(&mut self) -> Option<Result<Token<'a>, TokenizerError>> {
         if let Some(t) = self.get() {
             match t as char {
                 ' ' => self.next(),
-                '(' => Ok(Token::LParen),
-                ')' => Ok(Token::RParen),
+                '(' => Some(Ok(Token::LParen)),
+                ')' => Some(Ok(Token::RParen)),
                 'a'..='z' | '+' | '-' | '*' | '/' => {
                     if let Ok(v) = self.collect(Self::is_character) {
-                        Ok(Token::Symbol(str::from_utf8(v).unwrap()))
+                        Some(Ok(Token::Symbol(str::from_utf8(v).unwrap())))
                     } else {
-                        Err(TokenizerError)
+                        Some(Err(TokenizerError{error: ErrorKind::GeneralError}))
                     }
                 }
                 '0'..='9' => {
                     if let Ok(v) = self.collect(Self::is_number) {
-                        Ok(Token::Symbol(str::from_utf8(v).unwrap()))
+                        Some(Ok(Token::Number(str::from_utf8(v).unwrap())))
                     } else {
-                        Err(TokenizerError)
+                        Some(Err(TokenizerError{error: ErrorKind::GeneralError}))
                     }
                 }
-                '.' => Ok(Token::Dot),
-                '\'' => Ok(Token::Quote),
-                _ => Err(TokenizerError),
-            }
-        } else {
-            Ok(Token::EOF)
-        }
-    }
-}
-
-pub struct Tokenizer<'a> {
-    iter: std::slice::Iter<'a, u8>,
-}
-
-impl<'a> Tokenizer<'a> {
-    pub fn new(input: &str) -> Tokenizer {
-        Tokenizer {
-            iter: input.as_bytes().iter(),
-        }
-    }
-
-    pub fn next(&mut self) -> Option<Token> {
-        if let Some(t) = self.iter.next() {
-            match *t as char {
-                '(' => Some(Token::LParen),
-                _ => Some(Token::Quote),
+                '.' => Some(Ok(Token::Dot)),
+                '\'' => Some(Ok(Token::Quote)),
+                _ => Some(Err(TokenizerError{error: ErrorKind::GeneralError})),
             }
         } else {
             None
@@ -148,11 +167,12 @@ mod tests {
         let input = String::from("(+ 2 2)");
 
         let mut t = Tokenizer2::new(&input);
-        assert_eq!(t.next().unwrap(), Token::LParen);
-        assert_eq!(t.next().unwrap(), Token::Symbol("+"));
-        assert_eq!(t.next().unwrap(), Token::Symbol("2"));
-        assert_eq!(t.next().unwrap(), Token::Symbol("2"));
-        assert_eq!(t.next().unwrap(), Token::RParen);
-        assert_eq!(t.next().unwrap(), Token::EOF);
+        assert_eq!(t.next().unwrap().unwrap(), Token::LParen);
+        assert_eq!(t.next().unwrap().unwrap(), Token::Symbol("+"));
+        assert_eq!(t.next().unwrap().unwrap(), Token::Number("2"));
+        assert_eq!(t.next().unwrap().unwrap(), Token::Number("2"));
+        assert_eq!(t.next().unwrap().unwrap(), Token::RParen);
+        assert_eq!(t.next(), None);
+        assert_eq!(t.next(), None);
     }
 }

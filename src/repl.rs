@@ -4,15 +4,16 @@ use std::io;
 use std::io::Write;
 
 pub fn repl(prompt: &str) {
-    let mut input = String::new();
     loop {
+        let mut input = String::new();
         print!("{}", prompt);
         io::stdout().flush().unwrap();
         io::stdin().read_line(&mut input).unwrap();
-        let mut t = token::Tokenizer2::new(&input);
+        println!("{}", input);
+        let mut t = token::Tokenizer2::new(input.trim());
         loop {
             match t.next() {
-                Ok(v) => match v {
+                Some(Ok(v)) => match v {
                     token::Token::EOF => {
                         println!("{:?}", v);
                         break;
@@ -22,11 +23,13 @@ pub fn repl(prompt: &str) {
                         io::stdout().flush().unwrap();
                     }
                 },
-                Err(v) => {
+                Some(Err(v)) => {
                     println!("{:?} ", v);
                     break;
-                }
+                },
+                None => break,
             }
         }
+        println!("");
     }
 }
