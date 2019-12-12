@@ -1,5 +1,5 @@
 use lis2::repl;
-use lis2::ast::Parser;
+use lis2::parser::Parser;
 
 fn main() {
     let input = "(+ 2 2)";

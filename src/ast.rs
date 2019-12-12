@@ -1,39 +1,145 @@
-use crate::token::{Token, Tokenizer2, TokenizerError};
-use std::error::Error;
-use std::iter::Iterator;
-
 #[derive(Debug)]
 enum ErrorKind {
-    TokenizerError,
-    ParserError,
-    ParseSexprError,
-    IntegerParseError,
-    ExprParseError,
+    ErrorGeneral(&'static str),
+    ErrorEval(&'static str),
+    ErrorUnknSym(&'static str),
 }
 
 #[derive(Debug)]
-pub struct ParserError {
+pub struct ASTError {
     error: ErrorKind,
 }
 
 #[derive(Debug)]
 pub struct Number {
-    val: i128,
+    pub val: i128,
+}
+
+impl<'a> Number {
+    fn eval(self) -> Result<ValType<'a>, ASTError> {
+        Ok(ValType::Number(self))
+    }
 }
 
 #[derive(Debug)]
 pub struct Sexpr<'a> {
-    val: Vec<ValType<'a>>,
+    pub val: Vec<ValType<'a>>,
+}
+
+impl<'a> Sexpr<'a> {
+    fn eval(mut self) -> Result<ValType<'a>, ASTError> {
+        self.val = {
+            let v: Result<Vec<ValType<'a>>, ASTError> =
+                self.val.into_iter().map(ValType::eval).collect();
+            v?
+        };
+        //        for v in self.val.iter_mut() {
+        //            // Memove??
+        //            *v = v.eval()?;
+        //        }
+
+        match self.val.len() {
+            0 => Ok(ValType::Nil),
+            1 => Ok(self.val.remove(0)),
+            _ => match self.val.remove(0) {
+                ValType::Symbol(sym) => self.eval_sym(sym.val),
+                _ => Err(ASTError {
+                    error: ErrorKind::ErrorEval("Not a symbol!"),
+                }),
+            },
+        }
+    }
+
+    fn eval_sym(self, sym: &str) -> Result<ValType<'a>, ASTError> {
+        match sym {
+            "+" => self.eval_add(),
+            "-" => self.eval_sub(),
+            "*" => self.eval_mul(),
+            "/" => self.eval_div(),
+            _ => Err(ASTError {
+                error: ErrorKind::ErrorUnknSym("Unknown Symbol"),
+            }),
+        }
+    }
+
+    fn eval_add(self) -> Result<ValType<'a>, ASTError> {
+        let mut res = 0;
+        for i in self.val {
+            match i {
+                ValType::Number(v) => res += v.val,
+                _ => {
+                    return Err(ASTError {
+                        error: ErrorKind::ErrorEval("NaN"),
+                    })
+                }
+            }
+        }
+        Ok(ValType::Number(Number { val: res }))
+    }
+    fn eval_sub(self) -> Result<ValType<'a>, ASTError> {
+        let mut res = 0;
+        for i in self.val {
+            match i {
+                ValType::Number(v) => res -= v.val,
+                _ => {
+                    return Err(ASTError {
+                        error: ErrorKind::ErrorEval("NaN"),
+                    })
+                }
+            }
+        }
+        Ok(ValType::Number(Number { val: res }))
+    }
+    fn eval_mul(self) -> Result<ValType<'a>, ASTError> {
+        let mut res = 1;
+        for i in self.val {
+            match i {
+                ValType::Number(v) => res *= v.val,
+                _ => {
+                    return Err(ASTError {
+                        error: ErrorKind::ErrorEval("NaN"),
+                    })
+                }
+            }
+        }
+        Ok(ValType::Number(Number { val: res }))
+    }
+    fn eval_div(self) -> Result<ValType<'a>, ASTError> {
+        let mut res = 0;
+        for i in self.val {
+            match i {
+                ValType::Number(v) => res += v.val,
+                _ => {
+                    return Err(ASTError {
+                        error: ErrorKind::ErrorEval("NaN"),
+                    })
+                }
+            }
+        }
+        Ok(ValType::Number(Number { val: res }))
+    }
 }
 
 #[derive(Debug)]
 pub struct Qexpr<'a> {
-    val: Sexpr<'a>,
+    pub val: Sexpr<'a>,
+}
+
+impl<'a> Qexpr<'a> {
+    fn eval(self) -> Result<ValType<'a>, ASTError> {
+        self.val.eval()
+    }
 }
 
 #[derive(Debug)]
 pub struct Symbol<'a> {
-    val: &'a str,
+    pub val: &'a str,
+}
+
+impl<'a> Symbol<'a> {
+    fn eval(self) -> Result<ValType<'a>, ASTError> {
+        Ok(ValType::Symbol(self))
+    }
 }
 
 #[derive(Debug)]
@@ -42,121 +148,28 @@ pub enum ValType<'a> {
     Sexpr(Sexpr<'a>),
     Qexpr(Qexpr<'a>),
     Symbol(Symbol<'a>),
+    Nil,
 }
 
-struct AST<'a> {
-    a_type: ValType<'a>,
-}
-
-pub struct Parser<'a> {
-    t: std::iter::Peekable<Tokenizer2<'a>>,
-    pos: Token<'a>,
-}
-
-impl<'a> Parser<'a> {
-    pub fn new(input: &'a str) -> Parser<'a> {
-        let t: Tokenizer2<'a> = Tokenizer2::new(input);
-
-        Parser {
-            t: t.peekable(),
-            pos: Token::LParen,
-        }
-    }
-
-    fn parse_sexpr(&mut self) -> Result<Sexpr<'a>, ParserError> {
-        // Pass lparen
-        self.t.next();
-        let mut ret: Vec<ValType<'a>> = Vec::new();
-        loop {
-            let token = self.t.peek();
-            match token {
-                Some(token2) => match token2 {
-                    Ok(Token::RParen) => {
-                        self.t.next();
-                        return Ok(Sexpr { val: ret });
-                    }
-                    _ => {
-                        let val = self.parse_expr()?;
-                        ret.push(val);
-                    }
-                },
-                None => {
-                    return Err(ParserError {
-                        error: ErrorKind::ParseSexprError,
-                    });
-                }
-            }
-        }
-    }
-    //Err(ErrorKind::ParseSexprError)
-
-    fn parse_qexpr(&mut self) -> Result<Qexpr<'a>, ParserError> {
-        self.t.next();
-        Ok(Qexpr {
-            val: self.parse_sexpr()?,
-        })
-    }
-
-    fn parse_integer(&mut self) -> Result<Number, ParserError> {
-        let sym = self.t.next().unwrap().unwrap();
-        match sym {
-            Token::Number(num) => {
-                let num = num.parse();
-                match num {
-                    Ok(num) => Ok(Number { val: num }),
-                    Err(_) => Err(ParserError {
-                        error: ErrorKind::IntegerParseError,
-                    }),
-                }
-            }
-            _ => Err(ParserError {
-                error: ErrorKind::IntegerParseError,
-            }),
-        }
-    }
-
-    fn parse_symbol(&mut self) -> Result<Symbol<'a>, ParserError> {
-        if let Token::Symbol(v) = self.t.next().unwrap().unwrap() {
-            Ok(Symbol { val: v })
-        } else {
-            panic!("Something gone wrong!");
-        }
-    }
-
-    pub fn parse_expr(&mut self) -> Result<ValType<'a>, ParserError> {
-        if let Some(token) = self.t.peek() {
-            match token {
-                Ok(Token::LParen) => Ok(ValType::Sexpr(self.parse_sexpr()?)),
-                Ok(Token::Quote) => Ok(ValType::Qexpr(self.parse_qexpr()?)),
-                Ok(Token::Number(_)) => Ok(ValType::Number(self.parse_integer()?)),
-                Ok(Token::Symbol(v)) => Ok(ValType::Symbol(self.parse_symbol()?)),
-                _ => Err(ParserError {
-                    error: ErrorKind::ExprParseError,
-                }),
-            }
-        } else {
-            Err(ParserError {
-                error: ErrorKind::ParserError,
-            })
+impl<'a> ValType<'a> {
+    fn eval(self) -> Result<ValType<'a>, ASTError> {
+        match self {
+            ValType::Number(v) => v.eval(),
+            ValType::Sexpr(v) => v.eval(),
+            ValType::Qexpr(v) => v.eval(),
+            ValType::Symbol(v) => v.eval(),
+            ValType::Nil => Ok(ValType::Nil),
         }
     }
 }
 
-// impl<'a> Parser<'a> {
-//     fn new(input: &'a str) -> Result<Parser<'a>, ParserError> {
-//         let mut t: Tokenizer2<'a> = Tokenizer2::new(input);
-//                 let token = t.next();
-//                 match token {
-//                     Err(err) => Err(ParserError{error: ErrorKind::TokenizerError}),
-//                     Ok(token) => Ok(Parser {
-//                         t: t,
-//                         pos: token,
-//                     })
-//                 }
-//
-// //        Ok(Parser {
-// //            t,
-// //            pos: Token::LParen,
-// //        })
-//     }
-// }
+#[derive(Debug)]
+pub struct AST<'a> {
+    pub a_type: ValType<'a>,
+}
+
+impl<'a> AST<'a> {
+    pub fn eval(self) -> Result<ValType<'a>, ASTError> {
+        self.a_type.eval()
+    }
+}

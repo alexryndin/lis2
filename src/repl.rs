@@ -2,6 +2,7 @@
 use crate::token;
 use std::io;
 use std::io::Write;
+use crate::parser::Parser;
 
 pub fn repl(prompt: &str) {
     loop {
@@ -11,25 +12,11 @@ pub fn repl(prompt: &str) {
         io::stdin().read_line(&mut input).unwrap();
         println!("{}", input);
         let mut t = token::Tokenizer2::new(input.trim());
-        loop {
-            match t.next() {
-                Some(Ok(v)) => match v {
-                    token::Token::EOF => {
-                        println!("{:?}", v);
-                        break;
-                    }
-                    _ => {
-                        print!("{:?} ", v);
-                        io::stdout().flush().unwrap();
-                    }
-                },
-                Some(Err(v)) => {
-                    println!("{:?} ", v);
-                    break;
-                },
-                None => break,
-            }
-        }
-        println!("");
+        let mut parser = Parser::new(&input);
+        let out = parser.parse().unwrap();
+        let out = out.eval();
+
+
+        println!("{:?}", out);
     }
 }
