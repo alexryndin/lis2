@@ -50,21 +50,21 @@ impl<'a> Tokenizer2<'a> {
         }
     }
 
-    fn collect_identifier(&mut self) -> Result<&'a [u8], ()> {
-        let (start, mut end): (usize, usize) = (self.pos - 1, self.pos);
-        while let Some(v) = self.get() {
-            match v as char {
-                'a'..='z' | '+' | '_' | '-' | '&' | '?' | '!' | '0'..='9' => end += 1,
-                _ => {
-                    self.put();
-                    break;
-                }
-            }
-        }
-        //TODO: return also Errors
-        //   println!("{}", )
-        Ok(&self.input[start..end])
-    }
+//    fn collect_identifier(&mut self) -> Result<&'a [u8], ()> {
+//        let (start, mut end): (usize, usize) = (self.pos - 1, self.pos);
+//        while let Some(v) = self.get() {
+//            match v as char {
+//                'a'..='z' | '+' | '_' | '-' | '&' | '?' | '!' | '0'..='9' => end += 1,
+//                _ => {
+//                    self.put();
+//                    break;
+//                }
+//            }
+//        }
+//        //TODO: return also Errors
+//        //   println!("{}", )
+//        Ok(&self.input[start..end])
+//    }
 
     fn is_character(v: char) -> bool {
         match v as char {
@@ -94,35 +94,6 @@ impl<'a> Tokenizer2<'a> {
         //TODO: return also Errors
         Ok(&self.input[start..end])
     }
-
-//    pub fn next(&mut self) -> Result<Token<'a>, TokenizerError> {
-//        if let Some(t) = self.get() {
-//            match t as char {
-//                ' ' => self.next(),
-//                '(' => Ok(Token::LParen),
-//                ')' => Ok(Token::RParen),
-//                'a'..='z' | '+' | '-' | '*' | '/' => {
-//                    if let Ok(v) = self.collect(Self::is_character) {
-//                        Ok(Token::Symbol(str::from_utf8(v).unwrap()))
-//                    } else {
-//                        Err(TokenizerError{error: ErrorKind::GeneralError})
-//                    }
-//                }
-//                '0'..='9' => {
-//                    if let Ok(v) = self.collect(Self::is_number) {
-//                        Ok(Token::Symbol(str::from_utf8(v).unwrap()))
-//                    } else {
-//                        Err(TokenizerError{error: ErrorKind::GeneralError})
-//                    }
-//                }
-//                '.' => Ok(Token::Dot),
-//                '\'' => Ok(Token::Quote),
-//                _ => Err(TokenizerError{error: ErrorKind::GeneralError}),
-//            }
-//        } else {
-//            Ok(Token::EOF)
-//        }
-//    }
 }
 
 impl <'a> Iterator for Tokenizer2<'a> {

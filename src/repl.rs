@@ -1,5 +1,4 @@
 // fn repl(prompt: "λ > ") {
-use crate::token;
 use std::io;
 use std::io::Write;
 use crate::parser::Parser;
@@ -11,7 +10,6 @@ pub fn repl(prompt: &str) {
         io::stdout().flush().unwrap();
         io::stdin().read_line(&mut input).unwrap();
         println!("{}", input);
-        let mut t = token::Tokenizer2::new(input.trim());
         let mut parser = Parser::new(&input);
         let out = parser.parse().unwrap();
         let out = out.eval();

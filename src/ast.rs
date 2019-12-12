@@ -10,26 +10,34 @@ pub struct ASTError {
     error: ErrorKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Number {
-    pub val: i128,
+    val: i128,
 }
 
-impl<'a> Number {
-    fn eval(self) -> Result<ValType<'a>, ASTError> {
+impl Number {
+    pub fn new(val: i128) -> Number {
+        Number { val }
+    }
+
+    fn eval(self) -> Result<ValType, ASTError> {
         Ok(ValType::Number(self))
     }
 }
 
-#[derive(Debug)]
-pub struct Sexpr<'a> {
-    pub val: Vec<ValType<'a>>,
+#[derive(Debug, PartialEq)]
+pub struct Sexpr {
+    val: Vec<ValType>,
 }
 
-impl<'a> Sexpr<'a> {
-    fn eval(mut self) -> Result<ValType<'a>, ASTError> {
+impl Sexpr {
+    pub fn new(val: Vec<ValType>) -> Sexpr {
+        Sexpr { val }
+    }
+
+    fn eval(mut self) -> Result<ValType, ASTError> {
         self.val = {
-            let v: Result<Vec<ValType<'a>>, ASTError> =
+            let v: Result<Vec<ValType>, ASTError> =
                 self.val.into_iter().map(ValType::eval).collect();
             v?
         };
@@ -50,8 +58,8 @@ impl<'a> Sexpr<'a> {
         }
     }
 
-    fn eval_sym(self, sym: &str) -> Result<ValType<'a>, ASTError> {
-        match sym {
+    fn eval_sym(self, sym: String) -> Result<ValType, ASTError> {
+        match sym.as_ref() {
             "+" => self.eval_add(),
             "-" => self.eval_sub(),
             "*" => self.eval_mul(),
@@ -62,7 +70,7 @@ impl<'a> Sexpr<'a> {
         }
     }
 
-    fn eval_add(self) -> Result<ValType<'a>, ASTError> {
+    fn eval_add(self) -> Result<ValType, ASTError> {
         let mut res = 0;
         for i in self.val {
             match i {
@@ -76,7 +84,7 @@ impl<'a> Sexpr<'a> {
         }
         Ok(ValType::Number(Number { val: res }))
     }
-    fn eval_sub(self) -> Result<ValType<'a>, ASTError> {
+    fn eval_sub(self) -> Result<ValType, ASTError> {
         let mut res = 0;
         for i in self.val {
             match i {
@@ -90,7 +98,7 @@ impl<'a> Sexpr<'a> {
         }
         Ok(ValType::Number(Number { val: res }))
     }
-    fn eval_mul(self) -> Result<ValType<'a>, ASTError> {
+    fn eval_mul(self) -> Result<ValType, ASTError> {
         let mut res = 1;
         for i in self.val {
             match i {
@@ -104,7 +112,7 @@ impl<'a> Sexpr<'a> {
         }
         Ok(ValType::Number(Number { val: res }))
     }
-    fn eval_div(self) -> Result<ValType<'a>, ASTError> {
+    fn eval_div(self) -> Result<ValType, ASTError> {
         let mut res = 0;
         for i in self.val {
             match i {
@@ -120,39 +128,47 @@ impl<'a> Sexpr<'a> {
     }
 }
 
-#[derive(Debug)]
-pub struct Qexpr<'a> {
-    pub val: Sexpr<'a>,
+#[derive(Debug, PartialEq)]
+pub struct Qexpr {
+    val: Sexpr,
 }
 
-impl<'a> Qexpr<'a> {
-    fn eval(self) -> Result<ValType<'a>, ASTError> {
+impl Qexpr {
+    pub fn new(val: Sexpr) -> Qexpr {
+        Qexpr { val }
+    }
+
+    fn eval(self) -> Result<ValType, ASTError> {
         self.val.eval()
     }
 }
 
-#[derive(Debug)]
-pub struct Symbol<'a> {
-    pub val: &'a str,
+#[derive(Debug, PartialEq)]
+pub struct Symbol {
+    val: String,
 }
 
-impl<'a> Symbol<'a> {
-    fn eval(self) -> Result<ValType<'a>, ASTError> {
+impl Symbol {
+    pub fn new(val: String) -> Symbol {
+        Symbol { val }
+    }
+
+    fn eval(self) -> Result<ValType, ASTError> {
         Ok(ValType::Symbol(self))
     }
 }
 
-#[derive(Debug)]
-pub enum ValType<'a> {
+#[derive(Debug, PartialEq)]
+pub enum ValType {
     Number(Number),
-    Sexpr(Sexpr<'a>),
-    Qexpr(Qexpr<'a>),
-    Symbol(Symbol<'a>),
+    Sexpr(Sexpr),
+    Qexpr(Qexpr),
+    Symbol(Symbol),
     Nil,
 }
 
-impl<'a> ValType<'a> {
-    fn eval(self) -> Result<ValType<'a>, ASTError> {
+impl ValType {
+    fn eval(self) -> Result<ValType, ASTError> {
         match self {
             ValType::Number(v) => v.eval(),
             ValType::Sexpr(v) => v.eval(),
@@ -164,12 +180,16 @@ impl<'a> ValType<'a> {
 }
 
 #[derive(Debug)]
-pub struct AST<'a> {
-    pub a_type: ValType<'a>,
+pub struct AST {
+    a_type: ValType,
 }
 
-impl<'a> AST<'a> {
-    pub fn eval(self) -> Result<ValType<'a>, ASTError> {
+impl AST {
+    pub fn new(val: ValType) -> AST {
+        AST { a_type: val }
+    }
+    pub fn eval(self) -> Result<ValType, ASTError> {
         self.a_type.eval()
     }
 }
+
