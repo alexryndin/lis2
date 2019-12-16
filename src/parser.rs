@@ -1,4 +1,5 @@
-use crate::ast::{Number, Qexpr, Sexpr, Symbol, ValType, AST};
+use crate::ast::{Number, Qexpr, Sexpr, Symbol, ValType, Val, AST};
+use std::rc::Rc;
 use crate::token::{Token, Tokenizer2};
 use std::iter::Iterator;
 
@@ -32,7 +33,7 @@ impl<'a> Parser<'a> {
     fn parse_sexpr(&mut self) -> Result<Sexpr, ParserError> {
         // Pass lparen
         self.t.next();
-        let mut ret: Vec<ValType> = Vec::new();
+        let mut ret: Vec<Val> = Vec::new();
         loop {
             let token = self.t.peek();
             match token {
@@ -43,7 +44,7 @@ impl<'a> Parser<'a> {
                     }
                     _ => {
                         let val = self.parse_expr()?;
-                        ret.push(val);
+                        ret.push(Rc::new(val));
                     }
                 },
                 None => {
@@ -88,7 +89,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(&mut self) -> Result<AST, ParserError> {
-        Ok(AST::new (self.parse_expr()?))
+        Ok(AST::new(Rc::new(self.parse_expr()?)))
     }
 
     pub fn parse_expr(&mut self) -> Result<ValType, ParserError> {
