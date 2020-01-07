@@ -106,7 +106,7 @@ impl <'a> Iterator for Tokenizer2<'a> {
                 ' ' => self.next(),
                 '(' => Some(Ok(Token::LParen)),
                 ')' => Some(Ok(Token::RParen)),
-                'a'..='z' | '+' | '-' | '*' | '/' => {
+                'a'..='z' | '+' | '-' | '*' | '/' | '\\' => {
                     if let Ok(v) = self.collect(Self::is_character) {
                         Some(Ok(Token::Symbol(str::from_utf8(v).unwrap())))
                     } else {

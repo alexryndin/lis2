@@ -1,4 +1,5 @@
-use crate::env::Env;
+use crate::env::ParentEnv;
+use crate::env::{Env, EnvRef, EnvError};
 use std::fmt;
 use std::rc::Rc;
 
@@ -14,25 +15,24 @@ pub struct ASTError {
     pub error: ErrorKind,
 }
 
-pub struct Func {
-    fun: fn(Sexpr, &mut Env) -> Result<Val, ASTError>,
+pub struct Function {
+    fun: fn(Sexpr, EnvRef) -> Result<Val, ASTError>,
 }
 
-impl PartialEq for Func {
+impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
         self.fun as usize == other.fun as usize
     }
 }
 
-impl fmt::Debug for Func {
+impl fmt::Debug for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "Fun <{}>", self.fun as usize)
+        write!(f, "Fun <{}>", self.fun as usize)
     }
 }
 
-
 pub struct Closure {
-    fun: Box<dyn Fn(Sexpr, &mut Env) -> Result<Val, ASTError>>,
+    fun: Box<dyn Fn(Sexpr, EnvRef) -> Result<Val, ASTError>>,
     sym: String,
 }
 
@@ -44,41 +44,145 @@ impl PartialEq for Closure {
 
 impl fmt::Debug for Closure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "Closure <>")
+        write!(f, "Closure <>")
     }
 }
 
-#[derive(PartialEq, Debug)]
-pub enum FuncType {
-    Function(Func),
-    Closure(Closure),
+#[derive(PartialEq)]
+pub struct Lambda {
+    params: Vec<Symbol>,
+    body: Val,
+    env: Option<Env>,
 }
 
-#[derive(PartialEq, Debug)]
-pub struct Function {
-    fun: FuncType,
+impl Lambda {
+
+    fn new_partial(body: Val, params: Vec<Symbol>, env: Env)  -> Result<Val, ASTError> {
+        Ok(Rc::new(ValType::Function(FuncType::Lambda(Lambda {
+            params,
+            body,
+            env: Some(env),
+        }))))
+    }
+  //  pub fn new_val(body: Val, params: Val, env: EnvRef) -> Result<Val, ASTError> {
+    pub fn new_val(body: Val, params: Val) -> Result<Val, ASTError> {
+        let body = match &*body {
+            ValType::Sexpr(_) => body,
+            _ => {
+                return Err(ASTError {
+                    error: ErrorKind::ErrorEval("setq -- expected Sexpr as a first arg"),
+                })
+            }
+        };
+
+        let params = match &*params {
+            ValType::Sexpr(v) => v,
+            _ => {
+                return Err(ASTError {
+                    error: ErrorKind::ErrorEval("setq -- expected Sexpr as a first arg"),
+                })
+            }
+        };
+        let params = {
+            let v: Result<Vec<Symbol>, ASTError> = params
+                .val
+                .iter()
+                .map(|x| match &**x {
+                    ValType::Symbol(v) => Ok(v.clone()),
+                    _ => Err(ASTError {
+                        error: ErrorKind::ErrorEval("Lambda passed not a symbol"),
+                    }),
+                })
+                .collect();
+            v?
+        };
+
+        let env = Env::new(None);
+
+        Ok(Rc::new(ValType::Function(FuncType::Lambda(Lambda {
+            params,
+            body,
+            env: None,
+        }))))
+    }
+
+    fn call(&self, val: Sexpr, parent_env: EnvRef) -> Result<Val, ASTError> {
+//        if val.val.len() > self.params.len() {
+//            return Err(ASTError {
+//                error: ErrorKind::ErrorEval("lambda eval -- too many args"),
+//            });
+//        }
+        println!("{}", "Lambda called!");
+        let mut env = match &self.env {
+            None => Env::new(None),
+            Some(e) => e.clone(),
+
+        };
+        let mut params = self.params.clone();
+        for v in val.val.into_iter().rev() {
+            let s = match params.pop() {
+                None => return Err(ASTError {
+                error: ErrorKind::ErrorEval("lambda eval -- too many args"),
+            }),
+                Some(v) => v.val,
+            };
+            
+            env.put(s, v);
+        };
+
+
+        if params.len() > 0 {
+        let body = Val::clone(&self.body);
+            Lambda::new_partial(body, params, env)
+        } else {
+            env = env.set_parent(Some(parent_env)).unwrap();
+            self.body.eval(Rc::new(env))
+        }
+
+
+        
+
+
+
+    }
 }
 
-// impl fmt::Debug for Function {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self.fun {
-//             FuncType::Function(f) => write!(f, "Fun <{}>", f.val as usize),
-//             FuncType::Closure(_) => write!(f, "Closure <>"),
-//         }
+impl fmt::Debug for Lambda {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Lambda <>")
+    }
+}
+
+// impl PartialEq for Lambda{
+//     fn eq(&self, other: &Self) -> bool {
+//         true
 //     }
 // }
 
-impl Function {
-//    pub fn new(fun: fn(Val, &Env) -> Result<Val, ASTError>) -> Function {
-//        Function { fun }
-//    }
+#[derive(PartialEq, Debug)]
+pub enum FuncType {
+    Function(Function),
+    Closure(Closure),
+    Lambda(Lambda),
+}
 
-    pub fn new_function(fun: fn(Sexpr, &mut Env) -> Result<Val, ASTError>) -> Val {
-        Rc::new(ValType::Function(Function { fun: FuncType::Function ( Func{ fun })}))
+impl FuncType {
+    //    pub fn new(fun: fn(Val, &Env) -> Result<Val, ASTError>) -> Function {
+    //        Function { fun }
+    //    }
+
+    pub fn new_function(fun: fn(Sexpr, EnvRef) -> Result<Val, ASTError>) -> Val {
+        Rc::new(ValType::Function(FuncType::Function(Function { fun })))
     }
 
-    pub fn new_closure(fun: Box<dyn Fn(Sexpr, &mut Env) -> Result<Val, ASTError>>, sym: &str) -> Val {
-        Rc::new(ValType::Function(Function { fun: FuncType::Closure( Closure{ fun: fun, sym: sym.to_owned() })}))
+    pub fn new_closure(
+        fun: Box<dyn Fn(Sexpr, EnvRef) -> Result<Val, ASTError>>,
+        sym: &str,
+    ) -> Val {
+        Rc::new(ValType::Function(FuncType::Closure(Closure {
+            fun: fun,
+            sym: sym.to_owned(),
+        })))
     }
 
     // Uncomment to realize that Sexpr::eval is the only good place
@@ -108,7 +212,7 @@ impl Number {
     }
 
     fn eval(&self) -> Result<Val, ASTError> {
-        Ok(Rc::new(ValType::Number(Number{ val: self.val})))
+        Ok(Rc::new(ValType::Number(Number { val: self.val })))
     }
 }
 
@@ -122,13 +226,10 @@ impl Sexpr {
         Sexpr { val }
     }
 
-    fn eval(&self, env: &mut Env) -> Result<Val, ASTError> {
+    fn eval(&self, env: EnvRef) -> Result<Val, ASTError> {
         let mut val = {
-            let v: Result<Vec<Val>, ASTError> = self
-                .val
-                .iter()
-                .map(|x| ValType::eval(&*x, env))
-                .collect();
+            let v: Result<Vec<Val>, ASTError> =
+                self.val.iter().map(|x| ValType::eval(&*x, Rc::clone(&env))).collect();
             v?
         };
         //        for v in self.val.iter_mut() {
@@ -140,12 +241,11 @@ impl Sexpr {
             0 => Ok(Rc::new(ValType::Nil)),
             1 => Ok(val.remove(0)),
             _ => match &*val.remove(0) {
-                ValType::Function(fun) => {
-                    match &fun.fun {
-                        FuncType::Function(fun) => (fun.fun)(Sexpr::new(val), env),
-                        FuncType::Closure(fun) => (fun.fun)(Sexpr::new(val), env),
-                    }
-                }
+                ValType::Function(fun) => match fun {
+                    FuncType::Function(fun) => (fun.fun)(Sexpr::new(val), env),
+                    FuncType::Closure(fun) => (fun.fun)(Sexpr::new(val), env),
+                    FuncType::Lambda(fun) => fun.call(Sexpr::new(val), env),
+                },
                 _ => Err(ASTError {
                     error: ErrorKind::ErrorEval("Not a symbol!"),
                 }),
@@ -161,15 +261,17 @@ pub struct Qexpr {
 
 impl Qexpr {
     pub fn new(val: Sexpr) -> Qexpr {
-        Qexpr { val: Rc::new(ValType::Sexpr(val)) }
+        Qexpr {
+            val: Rc::new(ValType::Sexpr(val)),
+        }
     }
 
-    fn eval(&self, _: &mut Env) -> Result<Val, ASTError> {
+    fn eval(&self, _: EnvRef) -> Result<Val, ASTError> {
         Ok(Rc::clone(&self.val))
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Symbol {
     pub val: String,
 }
@@ -179,12 +281,12 @@ impl Symbol {
         Symbol { val }
     }
 
-    fn eval(&self, env: &Env) -> Result<Val, ASTError> {
+    fn eval(&self, env: EnvRef) -> Result<Val, ASTError> {
         match env.get(&self.val) {
             Some(v) => Ok(v),
-            None => Err(ASTError {
+            None => { println!("{}", self.val); Err(ASTError {
                 error: ErrorKind::ErrorEval("Sym not found!"),
-            }),
+            })},
         }
     }
 }
@@ -196,14 +298,14 @@ pub enum ValType {
     Sexpr(Sexpr),
     Qexpr(Qexpr),
     Symbol(Symbol),
-    Function(Function),
+    Function(FuncType),
     Nil,
 }
 
 pub type Val = Rc<ValType>;
 
 impl ValType {
-    fn eval(&self, env: &mut Env) -> Result<Val, ASTError> {
+    fn eval(&self, env: EnvRef) -> Result<Val, ASTError> {
         match &self {
             ValType::Number(v) => v.eval(),
             ValType::Sexpr(v) => v.eval(env),
@@ -211,7 +313,9 @@ impl ValType {
             ValType::Symbol(v) => v.eval(env),
             ValType::Nil => Ok(Rc::new(ValType::Nil)),
             ValType::Function(_) => Err(ASTError {
-                error: ErrorKind::ErrorEval("Function tried to evaluate -- this should not have happened"),
+                error: ErrorKind::ErrorEval(
+                    "Function tried to evaluate -- this should not have happened",
+                ),
             }),
         }
     }
@@ -226,7 +330,7 @@ impl AST {
     pub fn new(val: Val) -> AST {
         AST { a_type: val }
     }
-    pub fn eval(&self, env: &mut Env) -> Result<Val, ASTError> {
+    pub fn eval(&self, env: EnvRef) -> Result<Val, ASTError> {
         self.a_type.eval(env)
     }
 }
